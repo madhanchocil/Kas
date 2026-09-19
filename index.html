@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UangKu - Catatan Keuangan Uang Masuk & Keluar</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white; color: black; }
+            .card-shadow { box-shadow: none !important; border: 1px solid #ddd; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-200">
+
+    <!-- Screen Lock Overlay / Login Modal -->
+    <div id="authOverlay" class="fixed inset-0 bg-slate-900/95 backdrop-blur-md z-50 flex items-center justify-center p-4 transition-all duration-300 no-print">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-sm w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-700 text-center space-y-6">
+            <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto text-3xl shadow-inner">
+                <i class="fa-solid fa-user-lock" id="authIcon"></i>
+            </div>
+            
+            <div>
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white" id="authTitle">Masukkan PIN Akses</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="authSubtitle">Aplikasi terkunci. Masukkan PIN untuk membuka catatan keuangan.</p>
+            </div>
+
+            <!-- Global URL Check for Multi-Device Auto-Sync -->
+            <div id="authSetupUrlContainer" class="space-y-3 text-left hidden">
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">URL Google Apps Script (Cloud)</label>
+                <div class="flex gap-2">
+                    <input type="text" id="authWebAppUrlInput" placeholder="https://script.google.com/..." class="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <button type="button" onclick="connectAndVerifyAuthUrl()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold whitespace-nowrap transition">
+                        Cek Cloud
+                    </button>
+                </div>
+            </div>
+
+            <form id="authForm" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                <div>
+                    <input type="password" id="pinInput" placeholder="Masukkan PIN" maxlength="12" required autofocus class="w-full text-center tracking-widest text-xl font-extrabold py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+                
+                <p id="authErrorMessage" class="text-xs text-rose-500 font-semibold hidden"></p>
+
+                <button type="submit" id="authSubmitBtn" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-lg shadow-emerald-600/30 transition active:scale-95">
+                    <i class="fa-solid fa-key mr-1.5"></i> Buka Akses
+                </button>
+            </form>
+
+            <div class="pt-2 border-t border-slate-100 dark:border-slate-700 text-center">
+                <button type="button" onclick="toggleAuthUrlInput()" class="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-medium">
+                    <i class="fa-solid fa-cloud mr-1"></i> <span id="authToggleUrlText">Hubungkan URL Cloud Baru di Perangkat Ini</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Wrapper -->
+    <div id="appContainer" class="hidden">
+        <!-- Navigation Bar -->
+        <!-- Navigation Bar -->
+        <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30 no-print transition-colors">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <!-- Ubah container utama menjadi flex-col untuk mobile, dan flex-row untuk desktop -->
+                <div class="flex flex-col md:flex-row items-center justify-between py-4 md:h-16 gap-3 md:gap-2">
+                    <!-- Logo & Title -->
+                    <div class="flex items-center space-x-2.5 sm:space-x-3 shrink-0 self-start md:self-center w-full md:w-auto justify-between md:justify-start">
+                        <div class="flex items-center space-x-2.5 sm:space-x-3">
+                            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg sm:text-xl shadow-md shadow-emerald-500/20">
+                                <i class="fa-solid fa-wallet"></i>
+                            </div>
+                            <div>
+                                <h1 class="font-bold text-lg sm:text-xl leading-none text-slate-900 dark:text-white flex items-center gap-1.5">
+                                    <span class="text-slate-900 dark:text-white">Pitih</span>
+                                    <span class="text-emerald-500">Bini</span>
+                                    <span class="text-slate-900 dark:text-white">Den</span>
+                                </h1>
+                                <p class="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">Indriyan Junita A.Md.Gz</p>
+                            </div>
+                        </div>
+                        <!-- Tambahkan tombol "Tambah" di sini untuk mobile -->
+                        <button onclick="openModal('add')" class="md:hidden px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-emerald-600/30 transition active:scale-95 flex items-center space-x-1.5">
+                            <i class="fa-solid fa-plus text-xs"></i>
+                            <span>Tambah</span>
+                        </button>
+                    </div>
+
+                    <!-- Header Actions: wrap untuk mobile, justify-center agar rapi -->
+                    <div class="flex items-center justify-center w-full md:w-auto gap-1.5 sm:gap-2 flex-wrap pt-3 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-700">
+                        <!-- Lock App Button -->
+                        <button onclick="lockApp()" title="Kunci Aplikasi" class="p-2.5 md:px-3 md:py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-600 text-xs font-medium transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-lock text-rose-500"></i>
+                            <span class="hidden md:inline">Kunci</span>
+                        </button>
+
+                        <!-- Change PIN Button -->
+                        <button onclick="openChangePinModal()" title="Ubah PIN Akses" class="p-2.5 md:px-3 md:py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-medium transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-shield-halved text-amber-500"></i>
+                            <span class="hidden md:inline">Ubah PIN</span>
+                        </button>
+
+                        <!-- Sync / Fetch Status -->
+                        <button onclick="fetchFromGoogleSheets()" title="Sinkronkan dengan Google Sheets" class="p-2.5 md:px-3 md:py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-medium transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-arrows-rotate text-emerald-500" id="syncIcon"></i>
+                            <span class="hidden md:inline">Sinkronkan</span>
+                        </button>
+
+                        <!-- Export CSV Button -->
+                        <button onclick="exportToCSV()" title="Ekspor Data ke CSV" class="p-2.5 md:px-3 md:py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-medium transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-file-csv text-emerald-600 dark:text-emerald-400 text-lg"></i>
+                            <span class="hidden md:inline">CSV</span>
+                        </button>
+
+                        <!-- Print Button -->
+                        <button onclick="window.print()" title="Cetak Laporan" class="p-2.5 md:px-3 md:py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-medium transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-print text-indigo-500 text-lg"></i>
+                            <span class="hidden md:inline">Cetak</span>
+                        </button>
+
+                        <!-- Dark Mode Toggle -->
+                        <button id="themeToggleBtn" onclick="toggleDarkMode()" title="Ubah Tema" class="p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                            <i id="themeIcon" class="fa-solid fa-moon text-sm"></i>
+                        </button>
+
+                        <!-- Add Transaction Button - Hide for mobile, show for desktop -->
+                        <button onclick="openModal('add')" class="hidden md:flex px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow-md shadow-emerald-600/30 transition active:scale-95 items-center space-x-1.5">
+                            <i class="fa-solid fa-plus text-sm"></i>
+                            <span>Tambah Transaksi</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Content Container -->
+        <main class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-8">
+
+            <!-- Google Sheets Integration Bar -->
+            <section class="bg-white dark:bg-slate-800 rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 dark:border-slate-700 shadow-sm no-print">
+                <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                            <i class="fa-solid fa-table"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-white">Koneksi Google Sheets (Cloud Terpusat)</h4>
+                            <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400" id="sheetStatusText">URL & PIN tersimpan di sheet khusus "Config"</p>
+                        </div>
+                    </div>
+
+                    <!-- Mode Input URL -->
+                    <div id="urlInputContainer" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                        <input type="text" id="webAppUrlInput" placeholder="Masukkan URL Web App (https://script.google.com/...)" class="w-full md:w-96 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <button onclick="saveWebAppUrl()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold whitespace-nowrap transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-plug"></i>
+                            <span>Hubungkan</span>
+                        </button>
+                    </div>
+
+                    <!-- Mode Terhubung -->
+                    <div id="urlConnectedContainer" class="hidden flex items-center justify-between sm:justify-end gap-2 w-full md:w-auto">
+                        <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            <i class="fa-solid fa-circle-check mr-1.5 text-emerald-500"></i> Terhubung Cloud
+                        </span>
+                        <button onclick="toggleEditUrl()" class="px-3 py-1.5 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl text-xs font-semibold whitespace-nowrap transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                            <span>Edit URL</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Summary Cards Grid -->
+            <section class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
+                <!-- Saldo Akhir Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200/80 dark:border-slate-700 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md card-shadow sm:col-span-2 md:col-span-1">
+                    <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-xl pointer-events-none"></div>
+                    
+                    <div class="mb-2 sm:mb-3">
+                        <span class="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">Total Saldo Akhir</span>
+                    </div>
+                    <div class="absolute top-4 right-4 w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                        <i class="fa-solid fa-scale-balanced text-sm sm:text-lg"></i>
+                    </div>
+
+                    <h2 id="totalSaldo" class="text-xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Rp 0</h2>
+                    <div class="mt-2 flex items-center text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
+                        <span id="saldoStatusBadge" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                            <i class="fa-solid fa-circle-info mr-1"></i> Sehat
+                        </span>
+                        <span class="ml-2">Akumulasi keseluruhan</span>
+                    </div>
+                </div>
+
+                <!-- Total Pemasukan Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200/80 dark:border-slate-700 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md card-shadow">
+                    <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-emerald-500/10 dark:bg-emerald-500/20 rounded-full blur-xl pointer-events-none"></div>
+                    
+                    <div class="mb-2 sm:mb-3">
+                        <span class="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">Total Pemasukan</span>
+                    </div>
+                    <!-- Ikon Panah di Pojok Kanan Atas -->
+                    <div class="absolute top-4 right-4 w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <i class="fa-solid fa-arrow-trend-up text-sm sm:text-lg"></i>
+                    </div>
+
+                    <h2 id="totalPemasukan" class="text-xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 tracking-tight">Rp 0</h2>
+                    <div class="mt-2 flex items-center text-[11px] sm:text-xs text-emerald-600 dark:text-emerald-400">
+                        <i class="fa-solid fa-arrow-up mr-1"></i>
+                        <span id="pemasukanCountText">0 transaksi</span>
+                    </div>
+                </div>
+
+                <!-- Total Pengeluaran Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200/80 dark:border-slate-700 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md card-shadow">
+                    <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-rose-500/10 dark:bg-rose-500/20 rounded-full blur-xl pointer-events-none"></div>
+                    
+                    <div class="mb-2 sm:mb-3">
+                        <span class="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">Total Pengeluaran</span>
+                    </div>
+                    <!-- Ikon Panah di Pojok Kanan Atas -->
+                    <div class="absolute top-4 right-4 w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                        <i class="fa-solid fa-arrow-trend-down text-sm sm:text-lg"></i>
+                    </div>
+
+                    <h2 id="totalPengeluaran" class="text-xl sm:text-3xl font-extrabold text-rose-600 dark:text-rose-400 tracking-tight">Rp 0</h2>
+                    <div class="mt-2 flex items-center text-[11px] sm:text-xs text-rose-600 dark:text-rose-400">
+                        <i class="fa-solid fa-arrow-down mr-1"></i>
+                        <span id="pengeluaranCountText">0 transaksi</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Visual Analytics Section -->
+            <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 no-print">
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200/80 dark:border-slate-700 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-bold text-slate-800 dark:text-white text-sm sm:text-base flex items-center gap-2">
+                            <i class="fa-solid fa-chart-bar text-emerald-500"></i>
+                            Perbandingan Arus Kas
+                        </h3>
+                        <span class="text-[10px] sm:text-xs text-slate-400">Pemasukan vs Pengeluaran</span>
+                    </div>
+                    <div class="relative h-48 sm:h-64 w-full flex items-center justify-center">
+                        <canvas id="barChartCanvas"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 border border-slate-200/80 dark:border-slate-700 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-bold text-slate-800 dark:text-white text-sm sm:text-base flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-indigo-500"></i>
+                            Kategori Pengeluaran
+                        </h3>
+                        <span class="text-[10px] sm:text-xs text-slate-400">Distribusi Biaya</span>
+                    </div>
+                    <div class="relative h-48 sm:h-64 w-full flex items-center justify-center">
+                        <canvas id="pieChartCanvas"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Filter & Search Section -->
+            <section class="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-700 shadow-sm space-y-3 sm:space-y-4 no-print">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm"></i>
+                        <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Cari keterangan / kategori..." class="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs sm:text-sm">
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <select id="filterType" onchange="applyFilters()" class="px-2.5 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="all">Semua Jenis</option>
+                            <option value="pemasukan">Pemasukan</option>
+                            <option value="pengeluaran">Pengeluaran</option>
+                        </select>
+
+                        <select id="filterCategory" onchange="applyFilters()" class="px-2.5 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="all">Semua Kategori</option>
+                        </select>
+
+                        <select id="filterSort" onchange="applyFilters()" class="px-2.5 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="newest">Terbaru</option>
+                            <option value="oldest">Terlama</option>
+                            <option value="highest">Nominal Terbesar</option>
+                            <option value="lowest">Nominal Terkecil</option>
+                        </select>
+
+                        <button onclick="resetFilters()" class="px-2.5 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs sm:text-sm font-medium transition">
+                            <i class="fa-solid fa-rotate-left mr-1"></i> Reset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Baris Rentang Tanggal & Kotak Total Rincian -->
+                <div class="pt-2 sm:pt-3 border-t border-slate-100 dark:border-slate-700/60 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs sm:text-sm">
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <span class="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Rentang Tanggal:</span>
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <input type="date" id="startDate" onchange="applyFilters()" class="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500">
+                            <span class="text-slate-400 text-xs">s/d</span>
+                            <input type="date" id="endDate" onchange="applyFilters()" class="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                    </div>
+
+                    <!-- Kotak Hasil Total Rincian Periode Filter -->
+                    <div class="flex items-center justify-around sm:justify-end space-x-3 bg-slate-50 dark:bg-slate-900/60 px-3.5 py-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
+                        <div>
+                            <span class="text-[9px] text-slate-400 uppercase font-bold block">Total Masuk:</span>
+                            <span id="filteredIncome" class="font-extrabold text-emerald-600 dark:text-emerald-400">Rp 0</span>
+                        </div>
+                        <div class="h-6 w-px bg-slate-200 dark:bg-slate-700"></div>
+                        <div>
+                            <span class="text-[9px] text-slate-400 uppercase font-bold block">Total Keluar:</span>
+                            <span id="filteredExpense" class="font-extrabold text-rose-600 dark:text-rose-400">Rp 0</span>
+                        </div>
+                        <div class="h-6 w-px bg-slate-200 dark:bg-slate-700"></div>
+                        <div>
+                            <span class="text-[9px] text-slate-400 uppercase font-bold block">Selisih:</span>
+                            <span id="filteredNet" class="font-extrabold text-blue-600 dark:text-blue-400">Rp 0</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Transaction Table Section -->
+            <section class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div class="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+                    <div>
+                        <h3 class="font-bold text-slate-800 dark:text-white text-base sm:text-lg">Riwayat Transaksi</h3>
+                        <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400" id="transactionCountSubtitle">Menampilkan 0 transaksi</p>
+                    </div>
+                    <button onclick="confirmResetAll()" class="no-print text-[11px] sm:text-xs text-rose-500 hover:text-rose-700 font-medium px-2 sm:px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition shrink-0">
+                        <i class="fa-solid fa-trash-can sm:mr-1"></i> <span class="hidden sm:inline">Hapus Semua</span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-[10px] sm:text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
+                                <th class="py-3 px-3 sm:px-6">Tanggal</th>
+                                <th class="py-3 px-3 sm:px-6">Kategori & Keterangan</th>
+                                <th class="py-3 px-3 sm:px-6">Jenis</th>
+                                <th class="py-3 px-3 sm:px-6 text-right">Jumlah</th>
+                                <th class="py-3 px-3 sm:px-6 text-center no-print">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionTableBody" class="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs sm:text-sm">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="emptyState" class="hidden py-10 px-4 text-center">
+                    <div class="w-12 h-12 sm:w-16 sm:h-16 bg-slate-100 dark:bg-slate-700 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3 text-xl sm:text-2xl">
+                        <i class="fa-regular fa-folder-open"></i>
+                    </div>
+                    <h4 class="font-semibold text-slate-700 dark:text-slate-300 text-sm sm:text-base">Belum Ada Catatan Transaksi</h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">Tidak ditemukan transaksi berdasarkan filter saat ini atau belum ada data yang dimasukkan.</p>
+                    <button onclick="openModal('add')" class="mt-4 px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg shadow-sm hover:bg-emerald-700 transition">
+                        + Tambah Transaksi Pertama
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal Form Transaksi -->
+    <div id="transactionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden opacity-0 transition-opacity duration-200 no-print">
+        <div class="bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 transform scale-95 transition-transform duration-200 max-h-[90vh] flex flex-col" id="modalContainer">
+            <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
+                <h3 id="modalTitle" class="font-bold text-slate-800 dark:text-white text-base sm:text-lg">Tambah Transaksi</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form id="transactionForm" onsubmit="handleFormSubmit(event)" class="p-5 space-y-4 overflow-y-auto">
+                <input type="hidden" id="transactionId">
+
+                <div>
+                    <label class="block text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Jenis Transaksi</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="type" value="pemasukan" class="peer sr-only" onchange="onTypeChange('pemasukan')" checked>
+                            <div class="py-2 px-3 sm:py-2.5 sm:px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-center text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 peer-checked:bg-emerald-500 peer-checked:text-white peer-checked:border-emerald-500 transition flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-arrow-down-left"></i> Pemasukan
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="type" value="pengeluaran" class="peer sr-only" onchange="onTypeChange('pengeluaran')">
+                            <div class="py-2 px-3 sm:py-2.5 sm:px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-center text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 peer-checked:bg-rose-500 peer-checked:text-white peer-checked:border-rose-500 transition flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-arrow-up-right"></i> Pengeluaran
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="amountInput" class="block text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Jumlah (Rp)</label>
+                    <div class="relative">
+                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">Rp</span>
+                        <!-- Ubah type="number" menjadi type="text" dan tambahkan oninput -->
+                        <input type="text" id="amountInput" required placeholder="0" oninput="formatInputRupiah(this)" class="w-full pl-10 pr-4 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white font-semibold text-base sm:text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="categoryInput" class="block text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Kategori</label>
+                    <select id="categoryInput" required class="w-full px-3 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </select>
+                </div>
+
+                <div>
+                    <label for="dateInput" class="block text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Tanggal</label>
+                    <input type="date" id="dateInput" required class="w-full px-3 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <div>
+                    <label for="descriptionInput" class="block text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Keterangan / Catatan</label>
+                    <input type="text" id="descriptionInput" placeholder="Contoh: Gaji Bulanan, Makan Siang..." required class="w-full px-3 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <div class="pt-3 flex items-center justify-end space-x-3 border-t border-slate-100 dark:border-slate-700">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs sm:text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                        Batal
+                    </button>
+                    <button type="submit" id="submitBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold shadow-md shadow-emerald-600/30 transition">
+                        Simpan Transaksi
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi Hapus Custom -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/65 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-200 no-print">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 transform scale-95 transition-transform duration-200 p-6 text-center space-y-4" id="confirmModalContainer">
+            <div id="confirmIconContainer" class="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto text-2xl shadow-inner">
+                <i class="fa-solid fa-triangle-exclamation" id="confirmIcon"></i>
+            </div>
+            
+            <div>
+                <h3 id="confirmTitle" class="text-lg font-bold text-slate-900 dark:text-white">Konfirmasi Hapus</h3>
+                <p id="confirmMessage" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">Apakah Anda yakin ingin menghapus transaksi ini?</p>
+            </div>
+
+            <div class="flex items-center space-x-3 pt-2">
+                <button type="button" id="confirmCancelBtn" onclick="closeConfirmModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                    Batal
+                </button>
+                <button type="button" id="confirmYesBtn" class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-md shadow-rose-600/35 transition">
+                    Ya, Hapus
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none no-print">
+        <div id="toastContent" class="flex items-center space-x-2 px-4 py-3 rounded-xl shadow-xl text-xs sm:text-sm font-semibold text-white bg-slate-900">
+            <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+            <span id="toastMessage">Berhasil menyimpan data!</span>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+
+        function formatInputRupiah(input) {
+            // Hanya ambil angka, buang karakter selain digit
+            let value = input.value.replace(/[^0-9]/g, '');
+            
+            // Format angka dengan pemisah titik
+            if (value) {
+                value = Number(value).toLocaleString('id-ID');
+            }
+            
+            input.value = value;
+        }
+
+        const CATEGORIES = {
+            pemasukan: ['Gaji', 'Bonus', 'Investasi', 'Penjualan', 'Lain-lain'],
+            pengeluaran: ['Makanan & Minuman', 'Transportasi', 'Belanja', 'Tagihan & Utilitas', 'Hiburan', 'Kesehatan', 'Pendidikan', 'Lain-lain']
+        };
+
+        let transactions = [];
+        let filteredTransactions = [];
+        let webAppUrl = localStorage.getItem('uangku_webapp_url') || '';
+        let isChangingPin = false;
+
+        // ===============================
+        // SESSION & AUTO LOCK
+        // ===============================
+        const IDLE_TIMEOUT = 15 * 60 * 1000;
+        let idleTimer = null;
+        let isAppUnlocked = false;
+        let barChartInstance = null;
+        let pieChartInstance = null;
+
+        // Init App on Load
+        window.addEventListener('DOMContentLoaded', () => {
+            initDarkMode();
+            checkAuthStatus();
+            initDateDefault();
+            if (webAppUrl) {
+                document.getElementById('webAppUrlInput').value = webAppUrl;
+                updateConnectionUI(true);
+            }
+        });
+
+        function initDarkMode() {
+            if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('themeIcon').className = 'fa-solid fa-sun text-xs sm:text-sm text-amber-400';
+            }
+        }
+
+        function toggleDarkMode() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                document.getElementById('themeIcon').className = 'fa-solid fa-moon text-xs sm:text-sm';
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                document.getElementById('themeIcon').className = 'fa-solid fa-sun text-xs sm:text-sm text-amber-400';
+            }
+        }
+
+        function initDateDefault() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('dateInput').value = today;
+        }
+
+        function toggleAuthUrlInput() {
+            const container = document.getElementById('authSetupUrlContainer');
+            const toggleText = document.getElementById('authToggleUrlText');
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                toggleText.textContent = 'Sembunyikan Pengaturan URL Cloud';
+            } else {
+                container.classList.add('hidden');
+                toggleText.textContent = 'Hubungkan URL Cloud Baru di Perangkat Ini';
+            }
+        }
+
+        async function connectAndVerifyAuthUrl() {
+            const urlInput = document.getElementById('authWebAppUrlInput').value.trim();
+            const errorMsg = document.getElementById('authErrorMessage');
+            if (!urlInput.startsWith('https://script.google.com')) {
+                showAuthError('URL Google Apps Script tidak valid!');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${urlInput}?action=getConfig`);
+                const data = await res.json();
+                webAppUrl = urlInput;
+                localStorage.setItem('uangku_webapp_url', urlInput);
+                
+                if (data.hasPin) {
+                    document.getElementById('authTitle').textContent = 'Masukkan PIN Cloud';
+                    document.getElementById('authSubtitle').textContent = 'URL terhubung! Masukkan PIN terdaftar dari cloud.';
+                } else {
+                    document.getElementById('authTitle').textContent = 'Buat PIN Cloud Baru';
+                    document.getElementById('authSubtitle').textContent = 'URL terhubung! Buat PIN untuk sheet ini.';
+                }
+                document.getElementById('authSetupUrlContainer').classList.add('hidden');
+                showToast('URL Cloud berhasil dihubungkan!', 'success');
+            } catch (err) {
+                console.error(err);
+                showAuthError('Gagal terhubung ke URL tersebut. Pastikan Apps Script sudah di-deploy dengan benar.');
+            }
+        }
+
+        // --- AUTH & CLOUD CONFIG LOGIC ---
+        async function checkAuthStatus() {
+            const authTitle = document.getElementById('authTitle');
+            const authSubtitle = document.getElementById('authSubtitle');
+            const authBtn = document.getElementById('authSubmitBtn');
+            const authIcon = document.getElementById('authIcon');
+
+            const storedUrl = localStorage.getItem('uangku_webapp_url');
+            const storedPin = localStorage.getItem('uangku_app_pin');
+
+            // ==========================================
+            // CEK SESSION
+            // ==========================================
+            const sessionActive = sessionStorage.getItem('uangku_session');
+
+            // Kalau session masih aktif, langsung buka aplikasi
+            if (sessionActive === 'active' && storedPin) {
+                isAppUnlocked = true;
+
+                document.getElementById('authOverlay').style.display = 'none';
+                document.getElementById('authOverlay').classList.add(
+                    'opacity-0',
+                    'pointer-events-none'
+                );
+
+                document.getElementById('appContainer').classList.remove('hidden');
+
+                updateConnectionUI(!!storedUrl);
+
+                startIdleTimer();
+
+                // Ambil data terbaru dari Google Sheets
+                fetchFromGoogleSheets();
+
+                return;
+            }
+
+            // ==========================================
+            // TIDAK ADA SESSION
+            // ==========================================
+            isAppUnlocked = false;
+
+            if (storedUrl) {
+                webAppUrl = storedUrl;
+
+                const urlInput = document.getElementById('webAppUrlInput');
+                if (urlInput) {
+                    urlInput.value = storedUrl;
+                }
+
+                try {
+                    const res = await fetch(
+                        `${webAppUrl}?action=getConfig`
+                    );
+
+                    const data = await res.json();
+
+                    if (!data.hasPin) {
+                        authTitle.textContent = 'Buat PIN Cloud Baru';
+                        authSubtitle.textContent =
+                            'PIN & URL akan disimpan di Cloud.';
+                        authBtn.innerHTML =
+                            `<i class="fa-solid fa-cloud-arrow-up mr-1.5"></i> Simpan PIN ke Cloud`;
+                        authIcon.className =
+                            'fa-solid fa-shield-halved';
+
+                    } else {
+                        authTitle.textContent = 'Masukkan PIN Cloud';
+                        authSubtitle.textContent =
+                            'Masukkan PIN untuk membuka aplikasi.';
+                        authBtn.innerHTML =
+                            `<i class="fa-solid fa-key mr-1.5"></i> Buka Akses`;
+                        authIcon.className =
+                            'fa-solid fa-user-lock';
+                    }
+
+                } catch (err) {
+                    console.error(
+                        'Gagal mengecek config cloud:',
+                        err
+                    );
+
+                    // Kalau cloud gagal, tetap gunakan PIN lokal
+                    authTitle.textContent = 'Masukkan PIN Akses';
+                    authSubtitle.textContent =
+                        'Masukkan PIN untuk membuka aplikasi.';
+                    authBtn.innerHTML =
+                        `<i class="fa-solid fa-key mr-1.5"></i> Buka Akses`;
+                    authIcon.className =
+                        'fa-solid fa-user-lock';
+                }
+
+            } else if (!storedPin) {
+
+                // Belum punya PIN
+                authTitle.textContent = 'Buat PIN Akses Baru';
+                authSubtitle.textContent =
+                    'Buat PIN untuk mengamankan aplikasi.';
+                authBtn.innerHTML =
+                    `<i class="fa-solid fa-floppy-disk mr-1.5"></i> Simpan PIN Lokal`;
+                authIcon.className =
+                    'fa-solid fa-shield-halved';
+
+            } else {
+
+                // Sudah punya PIN tetapi session sudah habis
+                authTitle.textContent = 'Masukkan PIN Akses';
+                authSubtitle.textContent =
+                    'Aplikasi terkunci. Masukkan PIN untuk membuka.';
+                authBtn.innerHTML =
+                    `<i class="fa-solid fa-key mr-1.5"></i> Buka Akses`;
+                authIcon.className =
+                    'fa-solid fa-user-lock';
+            }
+        }
+
+        async function handleAuthSubmit(e) {
+            e.preventDefault();
+            const pinInput = document.getElementById('pinInput').value.trim();
+            const errorMsg = document.getElementById('authErrorMessage');
+            const authBtn = document.getElementById('authSubmitBtn');
+
+            if (pinInput.length < 4) {
+                showAuthError('PIN minimal 4 digit!');
+                return;
+            }
+
+            if (webAppUrl) {
+                authBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Memverifikasi...`;
+                
+                if (isChangingPin) {
+                    await postToGoogleSheets({ action: 'setConfig', pin: pinInput, webAppUrl: webAppUrl });
+                    localStorage.setItem('uangku_app_pin', pinInput);
+                    isChangingPin = false;
+                    showToast('PIN & URL Cloud berhasil diperbarui!', 'success');
+                    unlockAppUI();
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`${webAppUrl}?action=verifyPin&pin=${encodeURIComponent(pinInput)}`);
+                    const data = await res.json();
+
+                    if (data.status === 'no_pin') {
+                        await postToGoogleSheets({ action: 'setConfig', pin: pinInput, webAppUrl: webAppUrl });
+                        localStorage.setItem('uangku_app_pin', pinInput);
+                        showToast('PIN & URL Tersimpan di Cloud Config!', 'success');
+                        unlockAppUI();
+                    } else if (data.status === 'success') {
+                        errorMsg.classList.add('hidden');
+                        localStorage.setItem('uangku_app_pin', pinInput);
+                        // Auto-save URL to local storage so other syncs are instant
+                        localStorage.setItem('uangku_webapp_url', webAppUrl);
+                        unlockAppUI();
+                    } else {
+                        showAuthError('PIN Salah! Silakan coba lagi.');
+                    }
+                } catch (err) {
+                    console.error('Gagal verifikasi PIN cloud:', err);
+                    const localPin = localStorage.getItem('uangku_app_pin');
+                    if (localPin && pinInput === localPin) {
+                        unlockAppUI();
+                    } else {
+                        showAuthError('PIN Salah atau koneksi cloud terputus.');
+                    }
+                } finally {
+                    checkAuthStatus();
+                }
+            } else {
+                const storedPin = localStorage.getItem('uangku_app_pin');
+                if (!storedPin || isChangingPin) {
+                    localStorage.setItem('uangku_app_pin', pinInput);
+                    isChangingPin = false;
+                    showToast('PIN Lokal Berhasil Disimpan!', 'success');
+                    unlockAppUI();
+                } else if (pinInput === storedPin) {
+                    unlockAppUI();
+                } else {
+                    showAuthError('PIN Salah!');
+                }
+            }
+        }
+
+        function showAuthError(msg) {
+            const errorMsg = document.getElementById('authErrorMessage');
+            errorMsg.textContent = msg;
+            errorMsg.classList.remove('hidden');
+            document.getElementById('pinInput').value = '';
+            document.getElementById('pinInput').focus();
+        }
+
+        function unlockAppUI() {
+
+            // Tandai session aktif
+            sessionStorage.setItem(
+                'uangku_session',
+                'active'
+            );
+
+            isAppUnlocked = true;
+
+            // Reset timer idle
+            resetIdleTimer();
+
+            const overlay =
+                document.getElementById('authOverlay');
+
+            const app =
+                document.getElementById('appContainer');
+
+            overlay.classList.add(
+                'opacity-0',
+                'pointer-events-none'
+            );
+
+            setTimeout(() => {
+
+                overlay.style.display = 'none';
+
+                app.classList.remove('hidden');
+
+                document.getElementById('pinInput').value = '';
+
+                updateConnectionUI(!!webAppUrl);
+
+                fetchFromGoogleSheets();
+
+            }, 300);
+        }
+
+        // ==========================================
+        // AUTO LOCK KARENA TIDAK ADA AKTIVITAS
+        // ==========================================
+
+        function startIdleTimer() {
+            resetIdleTimer();
+
+            const activityEvents = [
+                'mousemove',
+                'mousedown',
+                'keydown',
+                'touchstart',
+                'scroll',
+                'click'
+            ];
+
+            activityEvents.forEach(event => {
+                document.addEventListener(
+                    event,
+                    resetIdleTimer,
+                    { passive: true }
+                );
+            });
+        }
+
+
+        function resetIdleTimer() {
+
+            if (!isAppUnlocked) return;
+
+            clearTimeout(idleTimer);
+
+            idleTimer = setTimeout(() => {
+
+                console.log(
+                    'Tidak ada aktivitas. Aplikasi dikunci otomatis.'
+                );
+
+                lockApp(true);
+
+            }, IDLE_TIMEOUT);
+        }
+
+        function lockApp(autoLock = false) {
+
+            // Hentikan status session
+            sessionStorage.removeItem(
+                'uangku_session'
+            );
+
+            isAppUnlocked = false;
+
+            clearTimeout(idleTimer);
+
+            document
+                .getElementById('appContainer')
+                .classList.add('hidden');
+
+            const overlay =
+                document.getElementById('authOverlay');
+
+            overlay.style.display = 'flex';
+
+            setTimeout(() => {
+
+                overlay.classList.remove(
+                    'opacity-0',
+                    'pointer-events-none'
+                );
+
+            }, 10);
+
+            // Tampilkan pesan berbeda
+            if (autoLock) {
+
+                document.getElementById('authTitle').textContent =
+                    'Aplikasi Dikunci';
+
+                document.getElementById('authSubtitle').textContent =
+                    'Tidak ada aktivitas selama 30 menit. Masukkan PIN untuk melanjutkan.';
+
+            }
+
+            checkAuthStatus();
+
+            setTimeout(() => {
+                document
+                    .getElementById('pinInput')
+                    .focus();
+            }, 100);
+        }
+
+        function openChangePinModal() {
+            isChangingPin = true;
+            lockApp();
+            document.getElementById('authTitle').textContent = 'Ubah PIN & Cloud Config';
+            document.getElementById('authSubtitle').textContent = 'Masukkan PIN baru untuk keamanan.';
+            document.getElementById('authSubmitBtn').innerHTML = `<i class="fa-solid fa-floppy-disk mr-1.5"></i> Simpan PIN Baru`;
+        }
+
+        // --- GOOGLE SHEETS CONNECTION & SYNC ---
+        async function saveWebAppUrl() {
+            const url = document.getElementById('webAppUrlInput').value.trim();
+            if (!url.startsWith('https://script.google.com')) {
+                showToast('URL Google Apps Script tidak valid!', 'error');
+                return;
+            }
+            webAppUrl = url;
+            localStorage.setItem('uangku_webapp_url', url);
+
+            // Save URL to cloud config sheet automatically
+            const currentPin = localStorage.getItem('uangku_app_pin') || '';
+            await postToGoogleSheets({ action: 'setConfig', pin: currentPin, webAppUrl: url });
+
+            updateConnectionUI(true);
+            showToast('URL berhasil disimpan & disinkronkan ke Cloud!', 'success');
+            fetchFromGoogleSheets();
+        }
+
+        function toggleEditUrl() {
+            document.getElementById('urlInputContainer').classList.remove('hidden');
+            document.getElementById('urlConnectedContainer').classList.add('hidden');
+            document.getElementById('sheetStatusText').textContent = 'Data tersimpan di perangkat lokal & cloud';
+        }
+
+        function updateConnectionUI(isConnected) {
+            if (isConnected) {
+                document.getElementById('urlInputContainer').classList.add('hidden');
+                document.getElementById('urlConnectedContainer').classList.remove('hidden');
+                document.getElementById('sheetStatusText').textContent = 'Terhubung ke Google Sheets Cloud (Sheet Config Aktif)';
+            }
+        }
+
+        async function fetchFromGoogleSheets() {
+            if (!webAppUrl) {
+                loadLocalTransactions();
+                return;
+            }
+
+            const syncIcon = document.getElementById('syncIcon');
+            syncIcon.classList.add('fa-spin');
+
+            try {
+                // Fetch transactions and check config sync
+                const response = await fetch(`${webAppUrl}?action=getTransactions`);
+                const data = await response.json();
+                if (Array.isArray(data)) {
+                    transactions = data;
+                    saveLocalTransactions();
+                    showToast('Data berhasil disinkronkan dari cloud!', 'success');
+                } else {
+                    throw new Error('Format data tidak valid');
+                }
+            } catch (err) {
+                console.error('Gagal sinkronisasi cloud:', err);
+                showToast('Gagal sinkron, memuat data lokal.', 'error');
+                loadLocalTransactions();
+            } finally {
+                syncIcon.classList.remove('fa-spin');
+                populateCategoryFilter();
+                applyFilters();
+            }
+        }
+
+        async function postToGoogleSheets(payload) {
+
+            if (!webAppUrl) {
+
+                console.error(
+                    'Web App URL belum tersedia.'
+                );
+
+                return {
+                    result: 'error',
+                    message: 'Web App URL belum tersedia'
+                };
+
+            }
+
+
+            try {
+
+                const response =
+                    await fetch(webAppUrl, {
+
+                        method: 'POST',
+
+                        headers: {
+                            'Content-Type':
+                                'text/plain;charset=utf-8'
+                        },
+
+                        body: JSON.stringify(payload)
+
+                    });
+
+
+                const text =
+                    await response.text();
+
+
+                console.log(
+                    'Response Google Sheets:',
+                    text
+                );
+
+
+                if (!text) {
+
+                    return {
+                        result: 'error',
+                        message: 'Response kosong'
+                    };
+
+                }
+
+
+                try {
+
+                    return JSON.parse(text);
+
+                } catch (parseError) {
+
+                    console.error(
+                        'Response bukan JSON:',
+                        text
+                    );
+
+                    return {
+                        result: 'error',
+                        message:
+                            'Response Google Sheets tidak valid',
+                        raw: text
+                    };
+
+                }
+
+
+            } catch (err) {
+
+                console.error(
+                    'Gagal mengirim data ke Google Sheets:',
+                    err
+                );
+
+
+                return {
+
+                    result: 'error',
+
+                    message: err.message
+
+                };
+
+            }
+
+        }
+
+        function loadLocalTransactions() {
+            const saved = localStorage.getItem('uangku_transactions');
+            transactions = saved ? JSON.parse(saved) : [];
+            populateCategoryFilter();
+            applyFilters();
+        }
+
+        function saveLocalTransactions() {
+            localStorage.setItem('uangku_transactions', JSON.stringify(transactions));
+        }
+
+        // --- TRANSACTION CRUD & FILTERING ---
+        function onTypeChange(type) {
+            const select = document.getElementById('categoryInput');
+            select.innerHTML = '';
+            CATEGORIES[type].forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                select.appendChild(opt);
+            });
+        }
+
+        function openModal(mode, id = null) {
+            const modal = document.getElementById('transactionModal');
+            const container = document.getElementById('modalContainer');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                container.classList.remove('scale-95');
+            }, 10);
+
+            onTypeChange('pemasukan');
+            initDateDefault();
+
+            if (mode === 'edit' && id) {
+                document.getElementById('modalTitle').textContent = 'Edit Transaksi';
+                document.getElementById('submitBtn').textContent = 'Perbarui';
+                const tx = transactions.find(t => t.id === id);
+                if (tx) {
+                    document.getElementById('transactionId').value = tx.id;
+                    document.querySelector(`input[name="type"][value="${tx.type}"]`).checked = true;
+                    onTypeChange(tx.type);
+                    document.getElementById('amountInput').value = Number(tx.amount).toLocaleString('id-ID');
+                    document.getElementById('categoryInput').value = tx.category;
+                    document.getElementById('dateInput').value = tx.date;
+                    document.getElementById('descriptionInput').value = tx.description;
+                }
+            } else {
+                document.getElementById('modalTitle').textContent = 'Tambah Transaksi';
+                document.getElementById('submitBtn').textContent = 'Simpan Transaksi';
+                document.getElementById('transactionForm').reset();
+                initDateDefault();
+                onTypeChange('pemasukan');
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('transactionModal');
+            const container = document.getElementById('modalContainer');
+            modal.classList.add('opacity-0');
+            container.classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+
+            // Ambil tombol submit berdasarkan ID-nya
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // 1. LOCK / NONAKTIFKAN TOMBOL DAN UBAH TEKSNYA
+            submitBtn.disabled = true;
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Menyimpan...`;
+            submitBtn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            const id =
+                document.getElementById('transactionId').value ||
+                'TRX-' + Date.now();
+
+            const type =
+                document.querySelector(
+                    'input[name="type"]:checked'
+                ).value;
+
+            // Menghilangkan semua titik (.) sebelum diubah menjadi tipe Number
+            const rawAmount = document.getElementById('amountInput').value.replace(/\./g, '');
+            const amount = Number(rawAmount);
+
+            const category =
+                document.getElementById('categoryInput').value;
+
+            const date =
+                document.getElementById('dateInput').value;
+
+            const description =
+                document.getElementById('descriptionInput')
+                    .value
+                    .trim();
+
+            const existingIndex =
+                transactions.findIndex(
+                    t => t.id.toString() === id.toString()
+                );
+
+            const newTx = {
+                id: id,
+                date: date,
+                type: type,
+                category: category,
+                amount: amount,
+                description: description
+            };
+
+            try {
+                // ========================================================
+                // EDIT
+                // ========================================================
+                if (existingIndex >= 0) {
+                    transactions[existingIndex] = newTx;
+                    saveLocalTransactions();
+                    applyFilters();
+
+                    const result =
+                        await postToGoogleSheets({
+                            action: 'update',
+                            id: id,
+                            date: date,
+                            type: type,
+                            category: category,
+                            amount: amount,
+                            description: description
+                        });
+
+                    if (
+                        result &&
+                        result.result === 'success'
+                    ) {
+                        showToast(
+                            'Transaksi berhasil diperbarui di Google Sheets!',
+                            'success'
+                        );
+                    } else {
+                        showToast(
+                            'Data lokal berubah, tetapi update Google Sheets gagal.',
+                            'error'
+                        );
+                    }
+                }
+                // ========================================================
+                // TAMBAH
+                // ========================================================
+                else {
+                    transactions.unshift(newTx);
+                    saveLocalTransactions();
+                    applyFilters();
+
+                    const result =
+                        await postToGoogleSheets({
+                            action: 'add',
+                            id: id,
+                            date: date,
+                            type: type,
+                            category: category,
+                            amount: amount,
+                            description: description
+                        });
+
+                    if (
+                        result &&
+                        result.result === 'success'
+                    ) {
+                        showToast(
+                            'Transaksi berhasil ditambahkan!',
+                            'success'
+                        );
+                    } else {
+                        showToast(
+                            'Data lokal tersimpan, tetapi gagal dikirim ke Google Sheets.',
+                            'error'
+                        );
+                    }
+                }
+
+                closeModal();
+                applyFilters();
+
+            } catch (error) {
+                console.error("Terjadi kesalahan:", error);
+                showToast('Terjadi kesalahan jaringan/sistem.', 'error');
+            } finally {
+                // 2. BUKA KEMBALI LOCK TOMBOL SETELAH PROSES SELESAI
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+                submitBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+
+        // --- CUSTOM CONFIRM MODAL LOGIC ---
+        function showConfirmModal({ title, message, type = 'danger', onConfirm }) {
+            const modal = document.getElementById('confirmModal');
+            const container = document.getElementById('confirmModalContainer');
+            const titleEl = document.getElementById('confirmTitle');
+            const messageEl = document.getElementById('confirmMessage');
+            const iconContainer = document.getElementById('confirmIconContainer');
+            const iconEl = document.getElementById('confirmIcon');
+            const yesBtn = document.getElementById('confirmYesBtn');
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+
+            if (type === 'danger') {
+                iconContainer.className = 'w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto text-2xl shadow-inner';
+                iconEl.className = 'fa-solid fa-triangle-exclamation';
+                yesBtn.className = 'flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-md shadow-rose-600/35 transition';
+            } else {
+                iconContainer.className = 'w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto text-2xl shadow-inner';
+                iconEl.className = 'fa-solid fa-circle-exclamation';
+                yesBtn.className = 'flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-md shadow-amber-600/35 transition';
+            }
+
+            // Ganti event listener tombol "Ya" agar tidak menumpuk
+            const newYesBtn = yesBtn.cloneNode(true);
+            yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
+
+            newYesBtn.addEventListener('click', async () => {
+                closeConfirmModal();
+                if (typeof onConfirm === 'function') {
+                    await onConfirm();
+                }
+            });
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                container.classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirmModal');
+            const container = document.getElementById('confirmModalContainer');
+            modal.classList.add('opacity-0');
+            container.classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        }
+
+        // --- UPDATE FUNGSI HAPUS MENGGUNAKAN MODAL CUSTOM ---
+        async function deleteTransaction(id) {
+            showConfirmModal({
+                title: 'Hapus Transaksi',
+                message: 'Apakah Anda yakin ingin menghapus transaksi ini? Tindakan ini tidak dapat dibatalkan.',
+                type: 'danger',
+                onConfirm: async () => {
+                    transactions = transactions.filter(t => t.id !== id);
+                    saveLocalTransactions();
+                    applyFilters();
+                    showToast('Transaksi dihapus.', 'info');
+                    await postToGoogleSheets({ action: 'delete', id });
+                }
+            });
+        }
+
+        async function confirmResetAll() {
+            showConfirmModal({
+                title: 'Hapus Semua Data',
+                message: 'PERINGATAN: Seluruh data transaksi Anda akan dihapus permanen! Lanjutkan?',
+                type: 'danger',
+                onConfirm: async () => {
+                    transactions = [];
+                    saveLocalTransactions();
+                    applyFilters();
+                    showToast('Semua data telah dihapus.', 'error');
+                    await postToGoogleSheets({ action: 'reset' });
+                }
+            });
+        }
+
+        // --- FILTER & UI RENDERING ---
+        function populateCategoryFilter() {
+            const filterCat = document.getElementById('filterCategory');
+            const currentVal = filterCat.value;
+            filterCat.innerHTML = '<option value="all">Semua Kategori</option>';
+            
+            const allCats = [...new Set(transactions.map(t => t.category))];
+            allCats.forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                filterCat.appendChild(opt);
+            });
+            filterCat.value = currentVal;
+        }
+
+        function applyFilters() {
+            const search = document.getElementById('searchInput').value.trim();
+            const type = document.getElementById('filterType').value;
+            const category = document.getElementById('filterCategory').value;
+            const sort = document.getElementById('filterSort').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            filteredTransactions = transactions.filter(t => {
+                const matchSearch = t.description.toLowerCase().includes(search.toLowerCase()) || t.category.toLowerCase().includes(search.toLowerCase());
+                const matchType = type === 'all' || t.type === type;
+                const matchCategory = category === 'all' || t.category === category;
+                const matchStart = !startDate || t.date >= startDate;
+                const matchEnd = !endDate || t.date <= endDate;
+                return matchSearch && matchType && matchCategory && matchStart && matchEnd;
+            });
+
+            filteredTransactions.sort((a, b) => {
+                if (sort === 'newest') return new Date(b.date) - new Date(a.date);
+                if (sort === 'oldest') return new Date(a.date) - new Date(b.date);
+                if (sort === 'highest') return b.amount - a.amount;
+                if (sort === 'lowest') return a.amount - b.amount;
+            });
+
+            // --- CEK APAKAH ADA FILTER YANG AKTIF ---
+            const isFilterActive = search !== '' || type !== 'all' || category !== 'all' || startDate !== '' || endDate !== '';
+
+            let totalInc = 0;
+            let totalExp = 0;
+
+            // Hanya hitung jika filter benar-benar sedang digunakan
+            if (isFilterActive) {
+                filteredTransactions.forEach(t => {
+                    const amount = Number(t.amount) || 0;
+                    if (t.type === 'pemasukan' || t.type === 'income') {
+                        totalInc += amount;
+                    } else if (t.type === 'pengeluaran' || t.type === 'expense') {
+                        totalExp += amount;
+                    }
+                });
+            }
+
+            const net = totalInc - totalExp;
+
+            // --- TAMPILKAN KE ELEMEN HTML ---
+            if (!isFilterActive) {
+                // Jika tidak ada filter yang dipilih, set jadi Rp 0
+                document.getElementById('filteredIncome').textContent = 'Rp 0';
+                document.getElementById('filteredExpense').textContent = 'Rp 0';
+                document.getElementById('filteredNet').textContent = 'Rp 0';
+                document.getElementById('filteredNet').className = 'font-extrabold text-blue-600 dark:text-blue-400';
+            } else {
+                // Jika ada filter yang aktif, tampilkan hasil perhitungannya
+                document.getElementById('filteredIncome').textContent = formatRupiah(totalInc);
+                document.getElementById('filteredExpense').textContent = formatRupiah(totalExp);
+                
+                const netEl = document.getElementById('filteredNet');
+                
+                // Cek apakah pengeluaran lebih besar dari pemasukan (selisih minus)
+                if (net < 0) {
+                    netEl.textContent = '- ' + formatRupiah(Math.abs(net));
+                    netEl.className = 'font-extrabold text-rose-600 dark:text-rose-400';
+                } else {
+                    netEl.textContent = formatRupiah(net);
+                    netEl.className = 'font-extrabold text-blue-600 dark:text-blue-400';
+                }
+            }
+
+            renderDashboard();
+            renderTable();
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterType').value = 'all';
+            document.getElementById('filterCategory').value = 'all';
+            document.getElementById('filterSort').value = 'newest';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            applyFilters();
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterType').value = 'all';
+            document.getElementById('filterCategory').value = 'all';
+            document.getElementById('filterSort').value = 'newest';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            applyFilters();
+        }
+
+        function renderDashboard() {
+            let totalIn = 0;
+            let totalOut = 0;
+            let countIn = 0;
+            let countOut = 0;
+
+            transactions.forEach(t => {
+                if (t.type === 'pemasukan') {
+                    totalIn += t.amount;
+                    countIn++;
+                } else {
+                    totalOut += t.amount;
+                    countOut++;
+                }
+            });
+
+            const saldo = totalIn - totalOut;
+
+            document.getElementById('totalSaldo').textContent = formatRupiah(saldo);
+            document.getElementById('totalPemasukan').textContent = formatRupiah(totalIn);
+            document.getElementById('totalPengeluaran').textContent = formatRupiah(totalOut);
+            document.getElementById('pemasukanCountText').textContent = `${countIn} transaksi`;
+            document.getElementById('pengeluaranCountText').textContent = `${countOut} transaksi`;
+
+            const badge = document.getElementById('saldoStatusBadge');
+            if (saldo >= 0) {
+                badge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300';
+                badge.innerHTML = `<i class="fa-solid fa-circle-check mr-1"></i> Keuangan Sehat`;
+            } else {
+                badge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300';
+                badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i> Defisit`;
+            }
+
+            renderCharts(totalIn, totalOut);
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('transactionTableBody');
+            const emptyState = document.getElementById('emptyState');
+            const countSubtitle = document.getElementById('transactionCountSubtitle');
+
+            tbody.innerHTML = '';
+            countSubtitle.textContent = `Menampilkan ${filteredTransactions.length} dari ${transactions.length} transaksi`;
+
+            if (filteredTransactions.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            filteredTransactions.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50 dark:hover:bg-slate-900/30 transition border-b border-slate-100 dark:border-slate-700/60';
+                
+                const isIncome = t.type === 'pemasukan';
+                const typeBadgeClass = isIncome ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300';
+                const amountColor = isIncome ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-600 dark:text-rose-400 font-bold';
+                const sign = isIncome ? '+' : '-';
+
+                tr.innerHTML = `
+                    <td class="py-3 px-3 sm:px-6 whitespace-nowrap text-slate-600 dark:text-slate-300">${formatDate(t.date)}</td>
+                    <td class="py-3 px-3 sm:px-6">
+                        <div class="font-semibold text-slate-800 dark:text-white">${escapeHtml(t.description)}</div>
+                        <div class="text-[11px] text-slate-400">${escapeHtml(t.category)}</div>
+                    </td>
+                    <td class="py-3 px-3 sm:px-6 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold ${typeBadgeClass}">
+                            ${t.type.toUpperCase()}
+                        </span>
+                    </td>
+                    <td class="py-3 px-3 sm:px-6 whitespace-nowrap text-right ${amountColor}">${sign} ${formatRupiah(t.amount)}</td>
+                    <td class="py-3 px-3 sm:px-6 whitespace-nowrap text-center no-print">
+                        <div class="flex items-center justify-center space-x-1">
+                            <button onclick="openModal('edit', '${t.id}')" class="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition" title="Edit">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button onclick="deleteTransaction('${t.id}')" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition" title="Hapus">
+                                <i class="fa-solid fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderCharts(totalIn, totalOut) {
+            const barCtx = document.getElementById('barChartCanvas').getContext('2d');
+            if (barChartInstance) barChartInstance.destroy();
+            barChartInstance = new Chart(barCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Pemasukan', 'Pengeluaran'],
+                    datasets: [{
+                        data: [totalIn, totalOut],
+                        backgroundColor: ['#22c55e', '#f43f5e'],
+                        borderRadius: 8,
+                        barThickness: 36
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(200,200,200,0.1)' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+
+            const expenseCats = {};
+            transactions.filter(t => t.type === 'pengeluaran').forEach(t => {
+                expenseCats[t.category] = (expenseCats[t.category] || 0) + t.amount;
+            });
+
+            const pieLabels = Object.keys(expenseCats);
+            const pieData = Object.values(expenseCats);
+
+            const pieCtx = document.getElementById('pieChartCanvas').getContext('2d');
+            if (pieChartInstance) pieChartInstance.destroy();
+            
+            if (pieLabels.length === 0) {
+                pieLabels.push('Belum Ada Pengeluaran');
+                pieData.push(1);
+            }
+
+            pieChartInstance = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: pieLabels,
+                    datasets: [{
+                        data: pieData,
+                        backgroundColor: ['#f43f5e', '#fb923c', '#facc15', '#a3e635', '#22c55e', '#2dd4bf', '#38bdf8', '#818cf8', '#c084fc']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function formatRupiah(num) {
+            return 'Rp ' + Number(num).toLocaleString('id-ID');
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            return new Date(dateStr).toLocaleDateString('id-ID', options);
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const content = document.getElementById('toastContent');
+            const icon = document.getElementById('toastIcon');
+            const msgSpan = document.getElementById('toastMessage');
+
+            msgSpan.textContent = message;
+            if (type === 'success') {
+                content.className = 'flex items-center space-x-2 px-4 py-3 rounded-xl shadow-xl text-xs sm:text-sm font-semibold text-white bg-emerald-600';
+                icon.className = 'fa-solid fa-circle-check text-emerald-200';
+            } else if (type === 'error') {
+                content.className = 'flex items-center space-x-2 px-4 py-3 rounded-xl shadow-xl text-xs sm:text-sm font-semibold text-white bg-rose-600';
+                icon.className = 'fa-solid fa-triangle-exclamation text-rose-200';
+            } else {
+                content.className = 'flex items-center space-x-2 px-4 py-3 rounded-xl shadow-xl text-xs sm:text-sm font-semibold text-white bg-slate-900';
+                icon.className = 'fa-solid fa-circle-info text-blue-400';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function exportToCSV() {
+            if (transactions.length === 0) {
+                showToast('Tidak ada data untuk diekspor', 'error');
+                return;
+            }
+
+            let csv = 'ID,Tanggal,Jenis,Kategori,Jumlah,Keterangan\n';
+            transactions.forEach(t => {
+                csv += `"${t.id}","${t.date}","${t.type}","${t.category}",${t.amount},"${t.description.replace(/"/g, '""')}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `UangKu_Export_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Data berhasil diekspor ke CSV', 'success');
+        }
+    </script>
+</body>
+</html>
