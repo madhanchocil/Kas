@@ -1,0 +1,13 @@
+{
+  "background_color": "#f20ec6",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Pitih Bini Den",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "Pitih Den",
+  "start_url": "/",
+  "theme_color": "#f20ec6",
+  "id": "pitih-bini-den",
+  "description": "Catatan Masuk &amp; Keluar"
+}
